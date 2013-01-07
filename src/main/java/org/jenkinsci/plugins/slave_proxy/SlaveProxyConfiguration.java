@@ -5,9 +5,7 @@ import hudson.Extension;
 import hudson.model.AbstractDescribableImpl;
 import hudson.model.Descriptor;
 import hudson.model.Label;
-import hudson.model.labels.LabelExpression;
 import org.kohsuke.stapler.DataBoundConstructor;
-import org.springframework.aop.ClassFilter;
 
 /**
  * Configuration of one slave proxy.
@@ -25,10 +23,16 @@ public class SlaveProxyConfiguration extends AbstractDescribableImpl<SlaveProxyC
      */
     private int masterPort;
 
+    /**
+     * If true, bind on 127.0.0.1
+     */
+    private boolean localOnly;
+
     @DataBoundConstructor
-    public SlaveProxyConfiguration(String label, int masterPort) {
+    public SlaveProxyConfiguration(String label, int masterPort, boolean localOnly) {
         this.label = label;
         this.masterPort = masterPort;
+        this.localOnly = localOnly;
     }
 
     public String getLabel() {
@@ -39,13 +43,21 @@ public class SlaveProxyConfiguration extends AbstractDescribableImpl<SlaveProxyC
         return masterPort;
     }
 
+    public boolean isLocalOnly() {
+        return localOnly;
+    }
+
+    /**
+     * Value equality is based on whether the {@link SmartPortForwarder} needs
+     * to be restarted.
+     */
     @Override
     public boolean equals(Object o) {
         if (this == o) return true;
         if (o == null || getClass() != o.getClass()) return false;
 
         SlaveProxyConfiguration that = (SlaveProxyConfiguration) o;
-        return masterPort == that.masterPort;
+        return masterPort == that.masterPort && localOnly==that.localOnly;
     }
 
     @Override

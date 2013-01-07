@@ -41,9 +41,14 @@ public class MasterToSlaveProxy extends GlobalConfiguration {
     }
 
     private synchronized void restartForwarder() {
-        Map<SlaveProxyConfiguration,SmartPortForwarder> updated = new HashMap<SlaveProxyConfiguration,SmartPortForwarder>();
-        Set<SmartPortForwarder> existing = new HashSet<SmartPortForwarder>(forwarders.values());
+        // figure out port forwarders that we don't need
+        Map<SlaveProxyConfiguration,SmartPortForwarder> unwanted = new HashMap<SlaveProxyConfiguration, SmartPortForwarder>(forwarders);
+        unwanted.keySet().removeAll(slaveProxies);
+        for (SmartPortForwarder f : unwanted.values())
+            IOUtils.closeQuietly(f);
 
+        // get new ones created.
+        Map<SlaveProxyConfiguration,SmartPortForwarder> updated = new HashMap<SlaveProxyConfiguration,SmartPortForwarder>();
         for (SlaveProxyConfiguration sp : slaveProxies) {
             SmartPortForwarder f = forwarders.get(sp);
             if (f==null) {// if f!=null, reuse the existing proxy
@@ -52,16 +57,12 @@ public class MasterToSlaveProxy extends GlobalConfiguration {
                     f.start();
                 } catch (IOException e) {
                     LOGGER.log(Level.WARNING, "Failed to start the port forwarding service",e);
+                    continue;
                 }
             }
+            f.setSlaveSelector(sp.getApplicableLabel());
 
             updated.put(sp,f);
-        }
-
-        existing.removeAll(updated.values()); // find forwarders that aren't needed anymore
-
-        for (SmartPortForwarder f : existing) {
-            IOUtils.closeQuietly(f);
         }
         forwarders = Collections.unmodifiableMap(updated);
     }

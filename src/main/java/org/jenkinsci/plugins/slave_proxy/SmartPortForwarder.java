@@ -11,13 +11,13 @@ import hudson.remoting.VirtualChannel;
 import hudson.remoting.forward.Forwarder;
 import hudson.remoting.forward.ListeningPort;
 import hudson.remoting.forward.PortForwarder;
-import hudson.util.IOUtils;
 import hudson.util.StreamCopyThread;
 import jenkins.model.Jenkins;
 
 import java.io.Closeable;
 import java.io.IOException;
 import java.io.OutputStream;
+import java.net.InetAddress;
 import java.net.ServerSocket;
 import java.net.Socket;
 import java.util.logging.Logger;
@@ -40,7 +40,7 @@ public class SmartPortForwarder extends Thread implements Closeable, ListeningPo
 
     public SmartPortForwarder(SlaveProxyConfiguration sp) throws IOException {
         super(String.format("Port forwarder %d",sp.getMasterPort()));
-        this.socket = new ServerSocket(sp.getMasterPort());
+        this.socket = new ServerSocket(sp.getMasterPort(), 50, sp.isLocalOnly() ? InetAddress.getLocalHost() : null);
         // mark as a daemon thread by default.
         // the caller can explicitly cancel this by doing "setDaemon(false)"
         setDaemon(true);
