@@ -1,19 +1,27 @@
 package org.jenkinsci.plugins.slave_proxy;
 
-import antlr.ANTLRException;
+import hudson.CopyOnWrite;
 import hudson.Extension;
-import hudson.model.Label;
 import hudson.model.TaskListener;
 import hudson.remoting.Channel;
 import hudson.remoting.ChannelProperty;
+import hudson.remoting.forward.Forwarder;
 import hudson.remoting.forward.ForwarderFactory;
-import hudson.remoting.forward.ListeningPort;
-import hudson.remoting.forward.PortForwarder;
+import hudson.util.IOUtils;
 import jenkins.model.GlobalConfiguration;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.StaplerRequest;
 
 import java.io.IOException;
+import java.util.ArrayList;
+import java.util.Collections;
+import java.util.HashMap;
+import java.util.HashSet;
+import java.util.List;
+import java.util.Map;
+import java.util.Set;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * Retain configuration for the slave proxy service.
@@ -22,63 +30,82 @@ import java.io.IOException;
  */
 @Extension
 public class MasterToSlaveProxy extends GlobalConfiguration {
-    private String label;
+    private List<SlaveProxyConfiguration> slaveProxies = new ArrayList<SlaveProxyConfiguration>();
+
+    @CopyOnWrite
+    private transient volatile Map<SlaveProxyConfiguration,SmartPortForwarder> forwarders = Collections.emptyMap();
 
     public MasterToSlaveProxy() {
         load();
+        restartForwarder();
     }
 
-    public Label getApplicableLabel() {
-        try {
-            return Label.parseExpression(label);
-        } catch (ANTLRException e) {
-            return null; // invalid syntax
+    private synchronized void restartForwarder() {
+        Map<SlaveProxyConfiguration,SmartPortForwarder> updated = new HashMap<SlaveProxyConfiguration,SmartPortForwarder>();
+        Set<SmartPortForwarder> existing = new HashSet<SmartPortForwarder>(forwarders.values());
+
+        for (SlaveProxyConfiguration sp : slaveProxies) {
+            SmartPortForwarder f = forwarders.get(sp);
+            if (f==null) {// if f!=null, reuse the existing proxy
+                try {
+                    f = new SmartPortForwarder(sp);
+                    f.start();
+                } catch (IOException e) {
+                    LOGGER.log(Level.WARNING, "Failed to start the port forwarding service",e);
+                }
+            }
+
+            updated.put(sp,f);
         }
+
+        existing.removeAll(updated.values()); // find forwarders that aren't needed anymore
+
+        for (SmartPortForwarder f : existing) {
+            IOUtils.closeQuietly(f);
+        }
+        forwarders = Collections.unmodifiableMap(updated);
     }
 
-    public String getLabel() {
-        return label;
+    public List<SlaveProxyConfiguration> getSlaveProxies() {
+        return slaveProxies;
     }
 
-    public void setLabel(String label) {
-        this.label = label;
-        save();
+    public void setSlaveProxies(List<SlaveProxyConfiguration> slaveProxies) {
+        this.slaveProxies = new ArrayList<SlaveProxyConfiguration>(slaveProxies);
     }
 
     @Override
     public boolean configure(StaplerRequest req, JSONObject json) throws FormException {
         req.bindJSON(this,json);
+        restartForwarder();
+        save();
         return true;
     }
 
     /**
      * Starts the HTTP proxy service over this channel, and attach the access coordinate as the channel property.
      *
-     * This service can be later obtained as {@code channel.getProperty(PROXY_SERVICE)}.
+     * This service can be later obtained as {@code channel.getProperty(FORWARDER_SERVICE)}.
      *
      * @return
      *      Newly created proxy service.
      */
-    public ListeningPort startProxy(Channel channel, TaskListener listener) throws InterruptedException, IOException {
+    public Forwarder startProxy(Channel channel, TaskListener listener) throws InterruptedException, IOException {
         listener.getLogger().println("Starting a proxy service");
         SlaveProxyService service = channel.call(new ProxyServiceLauncher());
 
         // create the port forwarding from the master to the HTTP proxy on this slave.
         int slavePort = service.getPort();
 
-        // fatal bug fixed in 2.21
-        //        ListeningPort lp = channel.createLocalToRemotePortForwarding(0, "localhost", slavePort);
-        //
-        PortForwarder lp = new PortForwarder(0,
-                ForwarderFactory.create(channel, "localhost", slavePort));
-        lp.start();
+        Forwarder f = ForwarderFactory.create(channel, "localhost", slavePort);
 
-        channel.setProperty(PROXY_SERVICE, lp);
+        channel.setProperty(FORWARDER_SERVICE, f);
 
-        listener.getLogger().println("Proxy service on slave port "+slavePort+" is forwarded to the master on port "+lp.getPort());
-        return lp;
+        listener.getLogger().println("Proxy service on slave port "+slavePort);
+        return f;
     }
 
-    public static final ChannelProperty<ListeningPort> PROXY_SERVICE = new ChannelProperty<ListeningPort>(ListeningPort.class,"Proxy service");
+    public static final ChannelProperty<Forwarder> FORWARDER_SERVICE = new ChannelProperty<Forwarder>(Forwarder.class,"Forwarder service");
 
+    private static final Logger LOGGER = Logger.getLogger(MasterToSlaveProxy.class.getName());
 }

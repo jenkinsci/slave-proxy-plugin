@@ -2,6 +2,7 @@ package org.jenkinsci.plugins.slave_proxy;
 
 import hudson.Extension;
 import hudson.model.Computer;
+import hudson.model.Label;
 import hudson.model.TaskListener;
 import hudson.remoting.Channel;
 import hudson.remoting.VirtualChannel;
@@ -25,11 +26,15 @@ public class ComputerListenerImpl extends ComputerListener {
         VirtualChannel ch = c.getChannel();
         if (ch instanceof Channel) {
             Channel channel = (Channel) ch;
-            if (config.getApplicableLabel().matches(c.getNode())) {
-                try {
-                    config.startProxy(channel, listener);
-                } catch (IOException e) {
-                    e.printStackTrace(listener.error("Failed to start the HTTP proxy service"));
+            for (SlaveProxyConfiguration sp : config.getSlaveProxies()) {
+                Label al = sp.getApplicableLabel();
+                if (al!=null && al.matches(c.getNode())) {
+                    try {
+                        config.startProxy(channel, listener);
+                        return;
+                    } catch (IOException e) {
+                        e.printStackTrace(listener.error("Failed to start the HTTP proxy service"));
+                    }
                 }
             }
         }
