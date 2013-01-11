@@ -87,14 +87,16 @@ public class SmartPortForwarder extends Thread implements Closeable, ListeningPo
                                 new StreamCopyThread("Copier for "+s.getRemoteSocketAddress(),
                                     new SocketInputStream(s), out, true).start();
                             } catch (IOException e) {
-                                // this happens if the socket connection is terminated abruptly.
-                                LOGGER.log(FINE,"Port forwarding session was shut down abnormally",e);
-                            } finally {
-                                try {
-                                    s.close();
-                                } catch (IOException _) {
-                                    // ignore
-                                }
+                                LOGGER.log(WARNING, "Port forwarding failed", e);
+                                close();
+                            }
+                        }
+
+                        private void close() {
+                            try {
+                                s.close();
+                            } catch (IOException _) {
+                                // ignore
                             }
                         }
                     }.start();
