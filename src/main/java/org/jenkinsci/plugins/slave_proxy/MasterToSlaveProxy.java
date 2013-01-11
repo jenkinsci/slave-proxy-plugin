@@ -7,7 +7,6 @@ import hudson.remoting.Channel;
 import hudson.remoting.ChannelProperty;
 import hudson.remoting.forward.Forwarder;
 import hudson.remoting.forward.ForwarderFactory;
-import hudson.util.IOUtils;
 import jenkins.model.GlobalConfiguration;
 import net.sf.json.JSONObject;
 import org.kohsuke.stapler.StaplerRequest;
@@ -16,10 +15,8 @@ import java.io.IOException;
 import java.util.ArrayList;
 import java.util.Collections;
 import java.util.HashMap;
-import java.util.HashSet;
 import java.util.List;
 import java.util.Map;
-import java.util.Set;
 import java.util.logging.Level;
 import java.util.logging.Logger;
 
@@ -45,7 +42,11 @@ public class MasterToSlaveProxy extends GlobalConfiguration {
         Map<SlaveProxyConfiguration,SmartPortForwarder> unwanted = new HashMap<SlaveProxyConfiguration, SmartPortForwarder>(forwarders);
         unwanted.keySet().removeAll(slaveProxies);
         for (SmartPortForwarder f : unwanted.values())
-            IOUtils.closeQuietly(f);
+            try {
+                f.close();
+            } catch (IOException _) {
+                // ignore
+            }
 
         // get new ones created.
         Map<SlaveProxyConfiguration,SmartPortForwarder> updated = new HashMap<SlaveProxyConfiguration,SmartPortForwarder>();
