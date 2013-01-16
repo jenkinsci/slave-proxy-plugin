@@ -97,13 +97,11 @@ public class MasterToSlaveProxy extends GlobalConfiguration {
         SlaveProxyService service = channel.call(new ProxyServiceLauncher());
 
         // create the port forwarding from the master to the HTTP proxy on this slave.
-        int slavePort = service.getPort();
-
-        Forwarder f = ForwarderFactory.create(channel, "localhost", slavePort);
+        Forwarder f = new ForwarderBySlaveProxyService(channel,service);
 
         channel.setProperty(FORWARDER_SERVICE, f);
 
-        listener.getLogger().println("Proxy service on slave port "+slavePort);
+        listener.getLogger().println("Proxy service on slave port "+ service.getPort());
         return f;
     }
 
