@@ -10,6 +10,7 @@
   <artifactId>slave-proxy</artifactId>
   <version>1.0-SNAPSHOT</version>
   <packaging>hpi</packaging>
+  <url>https://wiki.jenkins-ci.org/display/JENKINS/Slave+HTTP+Proxy+Plugin</url>
 
   <dependencies>
     <dependency>
