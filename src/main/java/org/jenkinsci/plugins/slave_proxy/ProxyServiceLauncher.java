@@ -6,6 +6,8 @@ import org.littleshoot.proxy.DefaultHttpProxyServer;
 
 import java.io.IOException;
 import java.net.ServerSocket;
+import java.util.logging.Level;
+import java.util.logging.Logger;
 
 /**
  * {@link Callable} that actually starts the HTTP proxy service.
@@ -44,4 +46,11 @@ class ProxyServiceLauncher implements Callable<SlaveProxyService, IOException> {
     }
 
     private static final long serialVersionUID = 1L;
+
+    private static final Logger LITTLE_PROXY_LOGGER = Logger.getLogger("org.littleshoot.proxy");
+
+    static {
+        // info level logging on little proxy is too verbose
+        LITTLE_PROXY_LOGGER.setLevel(Level.WARNING);
+    }
 }
